@@ -5,10 +5,10 @@ requirements = [x.strip() for x in open("requirements.txt", "r").readlines()]
 
 setup(
     name = "sippy",
-    version = "2.0.dev1",
+    version = "2.0+tbs",
     packages = find_packages(),
 
-    install_requires = requirements,
+    #install_requires = requirements,
     package_data = {
         '': ['dictionary', '*.md']
         },
