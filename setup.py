@@ -5,7 +5,7 @@ requirements = [x.strip() for x in open("requirements.txt", "r").readlines()]
 
 setup(
     name = "sippy",
-    version = "2.0.dev0",
+    version = "2.0.dev1",
     packages = find_packages(),
 
     install_requires = requirements,
