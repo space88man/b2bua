@@ -26,14 +26,15 @@
 
 from sippy.UaStateGeneric import UaStateGeneric
 
+
 class UaStateDead(UaStateGeneric):
-    sname = 'Dead'
+    sname = "Dead"
     dead = True
 
     def __init__(self, ua):
         UaStateGeneric.__init__(self, None)
         if ua.cId != None:
-            ua.global_config['_sip_tm'].unregConsumer(ua, str(ua.cId))
+            ua.global_config["_sip_tm"].unregConsumer(ua, str(ua.cId))
         ua.tr = None
         ua.event_cb = None
         ua.conn_cbs = ()

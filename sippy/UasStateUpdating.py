@@ -28,6 +28,8 @@ from sippy.SipContact import SipContact
 from sippy.SipAddress import SipAddress
 from sippy.UaStateGeneric import UaStateGeneric
 from sippy.CCEvents import CCEventDisconnect, CCEventRing, CCEventConnect, CCEventFail, CCEventRedirect
+from functools import partial
+
 
 class UasStateUpdating(UaStateGeneric):
     sname = 'Updating(UAS)'
@@ -75,7 +77,7 @@ class UasStateUpdating(UaStateGeneric):
                 scode = (180, 'Ringing', None)
             body = scode[2]
             if body != None and self.ua.on_local_sdp_change != None and body.needs_update:
-                self.ua.on_local_sdp_change(body, lambda x: self.ua.recvEvent(event))
+                self.ua.on_local_sdp_change(body, partial(self.ua.recvEvent, event))
                 return None
             self.ua.lSDP = body
             self.ua.sendUasResponse(scode[0], scode[1], body)
@@ -83,7 +85,7 @@ class UasStateUpdating(UaStateGeneric):
         elif isinstance(event, CCEventConnect):
             code, reason, body = event.getData()
             if body != None and self.ua.on_local_sdp_change != None and body.needs_update:
-                self.ua.on_local_sdp_change(body, lambda x: self.ua.recvEvent(event))
+                self.ua.on_local_sdp_change(body, partial(self.ua.recvEvent, event))
                 return None
             self.ua.lSDP = body
             self.ua.sendUasResponse(code, reason, body, (self.ua.lContact,))

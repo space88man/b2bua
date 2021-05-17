@@ -24,270 +24,129 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
-from datetime import datetime
-from heapq import heappush, heappop, heapify
-from threading import Lock
-from random import random
-import sys, traceback, signal
-if sys.version_info[0] < 3:
-    from thread import get_ident
-else:
-    from _thread import get_ident
 from sippy.Time.MonoTime import MonoTime
-from sippy.Core.Exceptions import dump_exception, StdException
+import os
+from anyio import create_task_group, run, sleep, create_memory_object_stream
+import inspect
 
-from elperiodic.ElPeriodic import ElPeriodic
 
-class EventListener(object):
-    etime = None
-    cb_with_ts = False
-    randomize_runs = None
+class Cancellable:
+    """Duck-cousin of sippy.Core.EventDispatcher.EventListener
+    Wrapper around a coroutine to allow
+    cancellation.
 
-    def __cmp__(self, other):
-        if other == None:
-            return 1
-        return cmp(self.etime, other.etime)
+    self._tg is set once the coroutine is scheduled
+    and is used for cancellation.
+    """
 
-    def __lt__(self, other):
-        return self.etime < other.etime
+    def __init__(self, ed, task, nticks):
+        self._task = task
+        self.ed = ed
+        self._tg = None
+        self.nticks = nticks
 
     def cancel(self):
-        if self.ed != None:
-            # Do not crash if cleanup() has already been called
-            self.ed.twasted += 1
-        self.cleanup()
-
-    def cleanup(self):
-        self.cb_func = None
-        self.cb_params = None
-        self.cb_kw_args = None
-        self.ed = None
-        self.randomize_runs = None
-
-    def get_randomizer(self, p):
-        return lambda x: x * (1.0 + p * (1.0 - 2.0 * random()))
-
-    def spread_runs(self, p):
-        self.randomize_runs = self.get_randomizer(p)
+        if self.ed.is_running:
+            assert self._tg
+            self._tg.cancel_scope.cancel()
+        else:
+            self.ed.tpending.remove(self)
 
     def go(self):
-        if self.ed.my_ident != get_ident():
-            print(datetime.now(), 'EventDispatcher2: Timer.go() from wrong thread, expect Bad Stuff[tm] to happen')
-            print('-' * 70)
-            traceback.print_stack(file = sys.stdout)
-            print('-' * 70)
-            sys.stdout.flush()
-        if not self.abs_time:
-            if self.randomize_runs != None:
-                ival = self.randomize_runs(self.ival)
-            else:
-                ival = self.ival
-            self.etime = self.itime.getOffsetCopy(ival)
+        self.ed.go_timer(self)
+
+    async def run_task(self):
+        async with create_task_group() as self._tg:
+            await self._task()
+
+            if self.nticks is not None and (self.nticks == -1 or self.nticks > 1):
+                # reschedule myself
+                if self.nticks > 1:
+                    self.nticks -= 1
+                await self.ed.tsend.send(self)
+
+
+def _twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
+    async def _task():
+        if abs_time:
+            await sleep(max(ival - MonoTime(), 0.0))
         else:
-            self.etime = self.ival
-            self.ival = None
-            self.nticks = 1
-        heappush(self.ed.tlisteners, self)
-        return
+            await sleep(ival)
 
-class Singleton(object):
-    '''Use to create a singleton'''
-    __state_lock = Lock()
+        if inspect.iscoroutinefunction(timeout_cb):
+            await timeout_cb(*cb_params)
+        else:
+            timeout_cb(*cb_params)
 
-    def __new__(cls, *args, **kwds):
-        '''
-        >>> s = Singleton()
-        >>> p = Singleton()
-        >>> id(s) == id(p)
-        True
-        '''
-        sself = '__self__'
-        cls.__state_lock.acquire()
-        if not hasattr(cls, sself):
-            instance = object.__new__(cls)
-            instance.__sinit__(*args, **kwds)
-            setattr(cls, sself, instance)
-        cls.__state_lock.release()
-        return getattr(cls, sself)
+    return Cancellable(ed, _task, nticks)
 
-    def __sinit__(self, *args, **kwds):
-        pass
 
-class EventDispatcher2(Singleton):
-    tlisteners = None
-    slisteners = None
-    endloop = False
-    signals_pending = None
-    twasted = 0
-    tcbs_lock = None
-    last_ts = None
-    my_ident = None
-    state_lock = Lock()
-    ed_inum = 0
-    elp = None
-    bands = None
+class EventDispatcher:
+    """Duck-cousin of sippy.Core.EventDispatcher.EventDispatcher"""
 
-    def __init__(self, freq = 100.0):
-        EventDispatcher2.state_lock.acquire()
-        if EventDispatcher2.ed_inum != 0:
-            EventDispatcher2.state_lock.release()
-            raise StdException('BZZZT, EventDispatcher2 has to be singleton!')
-        EventDispatcher2.ed_inum = 1
-        EventDispatcher2.state_lock.release()
-        self.tcbs_lock = Lock()
-        self.tlisteners = []
-        self.slisteners = []
-        self.signals_pending = []
-        self.last_ts = MonoTime()
-        self.my_ident = get_ident()
-        self.elp = ElPeriodic(freq)
-        self.elp.CFT_enable(signal.SIGURG)
-        self.bands = [(freq, 0),]
+    def __init__(self, freq=100.0):
+        self.is_running = False
+        self.tpending = []
+        self.servers = []
+        self.tsend, self.trecv = (None, None)
 
-    def signal(self, signum, frame):
-        self.signals_pending.append(signum)
+    def go_timer(self, k):
+        """Schedules a timer if the event loop is running;
+        else just add it to a pending list.
+        """
 
-    def regTimer(self, timeout_cb, ival, nticks = 1, abs_time = False, *cb_params):
-        self.last_ts = MonoTime()
+        if self.is_running:
+            self.tsend.send_nowait(k)
+        else:
+            self.tpending.append(k)
+
+    async def _timer_wait(self):
+        """This coroutine is also used to signal to exit the loop.
+        Just set self.inbox = None and set self._timer
+        """
+
+        async with self.trecv:
+            async for item in self.trecv:
+                if item is None:
+                    break
+                self.tg.start_soon(item.run_task)
+
+    async def aloop(self):
+        """Runs event loop forever."""
+
+        # overloaded member: used to schedule timers
+        # and exit the loop if self.inbox = None
+
+        self.is_running = True
+        self.tsend, self.trecv = create_memory_object_stream(256)
+
+        async with create_task_group() as self.tg:
+            # schedule pending timers
+            while self.tpending:
+                await self.tsend.send(self.tpending.pop())
+
+            while self.servers:
+                self.tg.start_soon(self.servers.pop().run)
+
+            # this task runs the event loop forever...
+            self.tg.start_soon(self._timer_wait)
+
+    def loop(self):
+        run(self.aloop, backend=os.getenv("SIPPY_ASYNC_BACKEND", "asyncio"))
+
+    def regTimer(self, timeout_cb, ival, nticks, abs_time, *cb_params):
         if nticks == 0:
             return
-        if abs_time and not isinstance(ival, MonoTime):
-            raise TypeError('ival is not MonoTime')
-        el = EventListener()
-        el.itime = self.last_ts.getCopy()
-        el.cb_func = timeout_cb
-        el.ival = ival
-        el.nticks = nticks
-        el.abs_time = abs_time
-        el.cb_params = cb_params
-        el.ed = self
-        return el
+        timer = _twrapper(self, timeout_cb, ival, nticks, abs_time, *cb_params)
+        return timer
 
-    def dispatchTimers(self):
-        while len(self.tlisteners) != 0:
-            el = self.tlisteners[0]
-            if el.cb_func != None and el.etime > self.last_ts:
-                # We've finished
-                return
-            el = heappop(self.tlisteners)
-            if el.cb_func == None:
-                # Skip any already removed timers
-                self.twasted -= 1
-                continue
-            if el.nticks == -1 or el.nticks > 1:
-                # Re-schedule periodic timer
-                if el.nticks > 1:
-                    el.nticks -= 1
-                if el.randomize_runs != None:
-                    ival = el.randomize_runs(el.ival)
-                else:
-                    ival = el.ival
-                el.etime.offset(ival)
-                heappush(self.tlisteners, el)
-                cleanup = False
-            else:
-                cleanup = True
-            try:
-                if not el.cb_with_ts:
-                    el.cb_func(*el.cb_params)
-                else:
-                    el.cb_func(self.last_ts, *el.cb_params)
-            except Exception as ex:
-                if isinstance(ex, SystemExit):
-                    raise
-                dump_exception('EventDispatcher2: unhandled exception when processing timeout event')
-            if self.endloop:
-                return
-            if cleanup:
-                el.cleanup()
-
-    def regSignal(self, signum, signal_cb, *cb_params, **cb_kw_args):
-        sl = EventListener()
-        if len([x for x in self.slisteners if x.signum == signum]) == 0:
-            signal.signal(signum, self.signal)
-        sl.signum = signum
-        sl.cb_func = signal_cb
-        sl.cb_params = cb_params
-        sl.cb_kw_args = cb_kw_args
-        self.slisteners.append(sl)
-        return sl
-
-    def unregSignal(self, sl):
-        self.slisteners.remove(sl)
-        if len([x for x in self.slisteners if x.signum == sl.signum]) == 0:
-            signal.signal(sl.signum, signal.SIG_DFL)
-        sl.cleanup()
-
-    def dispatchSignals(self):
-        while len(self.signals_pending) > 0:
-            signum = self.signals_pending.pop(0)
-            for sl in [x for x in self.slisteners if x.signum == signum]:
-                if sl not in self.slisteners:
-                    continue
-                try:
-                    sl.cb_func(*sl.cb_params, **sl.cb_kw_args)
-                except Exception as ex:
-                    if isinstance(ex, SystemExit):
-                        raise
-                    dump_exception('EventDispatcher2: unhandled exception when processing signal event')
-                if self.endloop:
-                    return
-
-    def dispatchThreadCallback(self, thread_cb, cb_params):
-        try:
-            thread_cb(*cb_params)
-        except Exception as ex:
-            if isinstance(ex, SystemExit):
-                raise
-            dump_exception('EventDispatcher2: unhandled exception when processing from-thread-call')
-        #print('dispatchThreadCallback dispatched', thread_cb, cb_params)
-
-    def callFromThread(self, thread_cb, *cb_params):
-        self.elp.call_from_thread(self.dispatchThreadCallback, thread_cb, cb_params)
-        #print('EventDispatcher2.callFromThread completed', str(self), thread_cb, cb_params)
-
-    def loop(self, timeout = None, freq = None):
-        if freq != None and self.bands[0][0] != freq:
-            for fb in self.bands:
-                if fb[0] == freq:
-                    self.bands.remove(fb)
-                    break
-            else:
-                fb = (freq, self.elp.addband(freq))
-            self.elp.useband(fb[1])
-            self.bands.insert(0, fb)
-        self.endloop = False
-        self.last_ts = MonoTime()
-        if timeout != None:
-            etime = self.last_ts.getOffsetCopy(timeout)
-        while True:
-            if len(self.signals_pending) > 0:
-                self.dispatchSignals()
-                if self.endloop:
-                    return
-            if self.endloop:
-                return
-            self.dispatchTimers()
-            if self.endloop:
-                return
-            if self.twasted * 2 > len(self.tlisteners):
-                # Clean-up removed timers when their share becomes more than 50%
-                self.tlisteners = [x for x in self.tlisteners if x.cb_func != None]
-                heapify(self.tlisteners)
-                self.twasted = 0
-            if (timeout != None and self.last_ts > etime) or self.endloop:
-                self.endloop = False
-                break
-            self.elp.procrastinate()
-            self.last_ts = MonoTime()
+    def regServer(self, obj):
+        self.servers.append(obj)
 
     def breakLoop(self):
-        self.endloop = True
-        #print('breakLoop')
-        #import traceback
-        #import sys
-        #traceback.print_stack(file = sys.stdout)
 
-ED2 = EventDispatcher2()
+        self.is_running = False
+        self.tg.cancel_scope.cancel()
+
+
+ED2 = EventDispatcher()

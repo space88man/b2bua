@@ -27,8 +27,9 @@
 from sippy.Time.Timeout import Timeout
 from sippy.UaStateGeneric import UaStateGeneric
 
+
 class UaStateFailed(UaStateGeneric):
-    sname = 'Failed'
+    sname = "Failed"
 
     def __init__(self, ua):
         UaStateGeneric.__init__(self, ua)
@@ -37,8 +38,9 @@ class UaStateFailed(UaStateGeneric):
         Timeout(self.goDead, ua.godead_timeout)
 
     def goDead(self):
-        #print 'Time in Failed state expired, going to the Dead state'
+        # print 'Time in Failed state expired, going to the Dead state'
         self.ua.changeState((UaStateDead,))
 
-if not 'UaStateDead' in globals():
+
+if "UaStateDead" not in globals():
     from sippy.UaStateDead import UaStateDead

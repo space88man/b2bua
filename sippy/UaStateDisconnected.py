@@ -27,8 +27,9 @@
 from sippy.Time.Timeout import Timeout
 from sippy.UaStateGeneric import UaStateGeneric
 
+
 class UaStateDisconnected(UaStateGeneric):
-    sname = 'Disconnected'
+    sname = "Disconnected"
 
     def __init__(self, ua):
         UaStateGeneric.__init__(self, ua)
@@ -36,17 +37,22 @@ class UaStateDisconnected(UaStateGeneric):
         ua.on_remote_sdp_change = None
         Timeout(self.goDead, ua.godead_timeout)
 
-    def recvRequest(self, req):
-        if req.getMethod() == 'BYE':
-            #print 'BYE received in the Disconnected state'
-            self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(200, 'OK', server = self.ua.local_ua))
+    async def recvRequest(self, req):
+        if req.getMethod() == "BYE":
+            # print 'BYE received in the Disconnected state'
+            await self.ua.global_config["_sip_tm"].sendResponse(
+                req.genResponse(200, "OK", server=self.ua.local_ua)
+            )
         else:
-            self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(500, 'Disconnected', server = self.ua.local_ua))
+            await self.ua.global_config["_sip_tm"].sendResponse(
+                req.genResponse(500, "Disconnected", server=self.ua.local_ua)
+            )
         return None
 
     def goDead(self):
-        #print 'Time in Disconnected state expired, going to the Dead state'
+        # print 'Time in Disconnected state expired, going to the Dead state'
         self.ua.changeState((UaStateDead,))
 
-if not 'UaStateDead' in globals():
+
+if "UaStateDead" not in globals():
     from sippy.UaStateDead import UaStateDead
