@@ -106,7 +106,7 @@ class EventDispatcher:
         """
 
         if self.is_running:
-            self.tsend.send_nowait(k)
+            self.tg.start_soon(k.run_task)
         else:
             self.tpending.append(k)
 
