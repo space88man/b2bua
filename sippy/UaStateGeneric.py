@@ -34,19 +34,19 @@ class UaStateGeneric(object):
     def __init__(self, ua):
         self.ua = ua
 
-    def recvRequest(self, req):
+    async def recvRequest(self, req):
         return None
 
-    def recvResponse(self, resp, tr):
+    async def recvResponse(self, resp, tr):
         return None
 
-    def recvEvent(self, event):
+    async def recvEvent(self, event):
         return None
 
-    def cancel(self, rtime, req):
+    async def cancel(self, rtime, req):
         return None
 
-    def onStateChange(self, newstate):
+    async def onStateChange(self, newstate):
         pass
 
     def __str__(self):

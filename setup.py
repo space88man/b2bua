@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 requirements = [x.strip() for x in open("requirements.txt", "r").readlines()]
 
 setup(
-    name = "sippy",
+    name = "sippy-tbs",
     version = "3.0.dev1+async",
     packages = find_packages(),
 

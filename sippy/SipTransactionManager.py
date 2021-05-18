@@ -549,7 +549,7 @@ class SipTransactionManager(object):
                     if rAddr == None:
                         rAddr = t.address
                     if not t.uack:
-                        self.transmitMsg(t.userv, t.ack, rAddr, checksum, t.compact)
+                        await self.transmitMsg(t.userv, t.ack, rAddr, checksum, t.compact)
                         if t.req_out_cb != None:
                             await t.req_out_cb(t.ack)
                     else:
@@ -568,7 +568,7 @@ class SipTransactionManager(object):
                 if t.state == UACK:
                     return
                 del self.tclient[t.tid]
-                await t.cleanup()
+                t.cleanup()
 
     async def timerA(self, t):
         # print 'timerA', t
@@ -597,12 +597,12 @@ class SipTransactionManager(object):
         # except:
         #    print 'SipTransactionManager: unhandled exception when processing response!'
 
-    async def timerC(self, t):
+    def timerC(self, t):
         # print 'timerC', t
         # print self.tclient
         t.teC = None
         del self.tclient[t.tid]
-        await t.cleanup()
+        t.cleanup()
 
     # 2. Server transaction methods
     async def incomingRequest(self, msg, checksum, tids, server):

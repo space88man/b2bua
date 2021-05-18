@@ -49,9 +49,9 @@ class UaStateDisconnected(UaStateGeneric):
             )
         return None
 
-    def goDead(self):
+    async def goDead(self):
         # print 'Time in Disconnected state expired, going to the Dead state'
-        self.ua.changeState((UaStateDead,))
+        await self.ua.changeState((UaStateDead,))
 
 
 if "UaStateDead" not in globals():

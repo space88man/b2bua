@@ -192,7 +192,7 @@ class UaStateConnected(UaStateGeneric):
                 req.appendHeader(SipHeader(name="refer-to", body=also))
                 rby = SipReferredBy(address=SipAddress(url=self.ua.lUri.getUrl()))
                 req.appendHeader(SipHeader(name="referred-by", body=rby))
-                self.ua.global_config["_sip_tm"].newTransaction(
+                await self.ua.global_config["_sip_tm"].newTransaction(
                     req,
                     self.rComplete,
                     laddress=self.ua.source_address,
@@ -204,7 +204,7 @@ class UaStateConnected(UaStateGeneric):
                 if redirect != None:
                     also = SipAlso(address=redirect)
                     req.appendHeader(SipHeader(name="also", body=also))
-                self.ua.global_config["_sip_tm"].newTransaction(
+                await self.ua.global_config["_sip_tm"].newTransaction(
                     req, laddress=self.ua.source_address, compact=self.ua.compact_sip
                 )
             self.ua.cancelCreditTimer()
@@ -256,7 +256,7 @@ class UaStateConnected(UaStateGeneric):
             )
             self.ua.lCSeq += 1
             self.ua.lSDP = body
-            self.ua.tr = self.ua.global_config["_sip_tm"].newTransaction(
+            self.ua.tr = await self.ua.global_config["_sip_tm"].newTransaction(
                 req,
                 self.ua.recvResponse,
                 laddress=self.ua.source_address,
@@ -269,7 +269,7 @@ class UaStateConnected(UaStateGeneric):
             req = self.ua.genRequest("INFO", reason=event.reason)
             req.setBody(body)
             self.ua.lCSeq += 1
-            self.ua.global_config["_sip_tm"].newTransaction(
+            await self.ua.global_config["_sip_tm"].newTransaction(
                 req, None, laddress=self.ua.source_address, compact=self.ua.compact_sip
             )
             return None
@@ -350,7 +350,7 @@ class UaStateConnected(UaStateGeneric):
                 challenge
             )
             self.ua.lCSeq += 1
-            self.ka_tr = self.ua.global_config["_sip_tm"].newTransaction(
+            self.ka_tr = await self.ua.global_config["_sip_tm"].newTransaction(
                 req,
                 self.keepAliveResp,
                 laddress=self.ua.source_address,

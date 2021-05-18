@@ -176,13 +176,13 @@ class UA(object):
         self.rCSeq = req.getHFBody("cseq").getCSeqNum()
         if self.state == None:
             if req.getMethod() == "INVITE":
-                self.changeState((UasStateIdle,))
+                await self.changeState((UasStateIdle,))
             else:
                 return None
         newstate = await self.state.recvRequest(req)
         if newstate != None:
-            self.changeState(newstate)
-        self.emitPendingEvents()
+            await self.changeState(newstate)
+        await self.emitPendingEvents()
         if newstate != None and req.getMethod() == "INVITE":
             return (None, self.state.cancel, self.disconnect)
         else:
@@ -225,8 +225,8 @@ class UA(object):
             del self.reqs[cseq]
         newstate = await self.state.recvResponse(resp, tr)
         if newstate != None:
-            self.changeState(newstate)
-        self.emitPendingEvents()
+            await self.changeState(newstate)
+        await self.emitPendingEvents()
 
     async def recvEvent(self, event):
         # print self, event
@@ -236,13 +236,13 @@ class UA(object):
                 or isinstance(event, CCEventFail)
                 or isinstance(event, CCEventDisconnect)
             ):
-                self.changeState((UacStateIdle,))
+                await self.changeState((UacStateIdle,))
             else:
                 return
         newstate = await self.state.recvEvent(event)
         if newstate != None:
-            self.changeState(newstate)
-        self.emitPendingEvents()
+            await self.changeState(newstate)
+        await self.emitPendingEvents()
 
     def disconnect(self, rtime=None):
         if rtime == None:
@@ -266,9 +266,9 @@ class UA(object):
         self.credit_timer = None
         self.disconnect(rtime)
 
-    def changeState(self, newstate):
+    async def changeState(self, newstate):
         if self.state != None:
-            self.state.onStateChange(newstate[0])
+            await self.state.onStateChange(newstate[0])
         self.state = newstate[0](self)
         if len(newstate) > 1:
             for callback in newstate[1]:
@@ -358,7 +358,7 @@ class UA(object):
         # print 'UA::recvACK', req
         newstate = self.state.recvACK(req)
         if newstate != None:
-            self.changeState(newstate)
+            await self.changeState(newstate)
         await self.emitPendingEvents()
 
     def isYours(self, req=None, call_id=None, from_tag=None, to_tag=None):

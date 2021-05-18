@@ -35,14 +35,14 @@ class UasStateUpdating(UaStateGeneric):
     sname = 'Updating(UAS)'
     connected = True
 
-    def recvRequest(self, req):
+    async def recvRequest(self, req):
         if req.getMethod() == 'INVITE':
-            self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(491, \
+            await self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(491, \
               'Request Pending', server = self.ua.local_ua), lossemul = self.ua.uas_lossemul)
             return None
         elif req.getMethod() == 'BYE':
-            self.ua.sendUasResponse(487, 'Request Terminated')
-            self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(200, 'OK', \
+            await self.ua.sendUasResponse(487, 'Request Terminated')
+            await self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(200, 'OK', \
               server = self.ua.local_ua), lossemul = self.ua.uas_lossemul)
             #print 'BYE received in the Updating state, going to the Disconnected state'
             event = CCEventDisconnect(rtime = req.rtime, origin = self.ua.origin)
@@ -56,11 +56,11 @@ class UasStateUpdating(UaStateGeneric):
             return (UaStateDisconnected, self.ua.disc_cbs, req.rtime, self.ua.origin)
         elif req.getMethod() == 'REFER':
             if req.countHFs('refer-to') == 0:
-                self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(400, 'Bad Request',
+                await self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(400, 'Bad Request',
                   server = self.ua.local_ua), lossemul = self.ua.uas_lossemul)
                 return None
             self.ua.sendUasResponse(487, 'Request Terminated')
-            self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(202, 'Accepted', \
+            await self.ua.global_config['_sip_tm'].sendResponse(req.genResponse(202, 'Accepted', \
               server = self.ua.local_ua), lossemul = self.ua.uas_lossemul)
             also = req.getHFBody('refer-to').getCopy()
             self.ua.equeue.append(CCEventDisconnect(also, rtime = req.rtime, origin = self.ua.origin))
@@ -70,7 +70,7 @@ class UasStateUpdating(UaStateGeneric):
         #print 'wrong request %s in the state Updating' % req.getMethod()
         return None
 
-    def recvEvent(self, event):
+    async def recvEvent(self, event):
         if isinstance(event, CCEventRing):
             scode = event.getData()
             if scode == None:
@@ -114,7 +114,7 @@ class UasStateUpdating(UaStateGeneric):
             self.ua.sendUasResponse(487, 'Request Terminated', reason_rfc3326 = event.reason)
             req = self.ua.genRequest('BYE', reason = event.reason)
             self.ua.lCSeq += 1
-            self.ua.global_config['_sip_tm'].newTransaction(req, \
+            await self.ua.global_config['_sip_tm'].newTransaction(req, \
               laddress = self.ua.source_address, compact = self.ua.compact_sip)
             self.ua.cancelCreditTimer()
             self.ua.disconnect_ts = event.rtime
@@ -122,10 +122,10 @@ class UasStateUpdating(UaStateGeneric):
         #print 'wrong event %s in the Updating state' % event
         return None
 
-    def cancel(self, rtime, req):
+    async def cancel(self, rtime, req):
         req = self.ua.genRequest('BYE')
         self.ua.lCSeq += 1
-        self.ua.global_config['_sip_tm'].newTransaction(req, \
+        await self.ua.global_config['_sip_tm'].newTransaction(req, \
           laddress = self.ua.source_address, compact = self.ua.compact_sip)
         self.ua.cancelCreditTimer()
         self.ua.disconnect_ts = rtime
