@@ -63,18 +63,16 @@ class UacStateIdle(UaStateGeneric):
             self.ua.rTarget = SipURL(
                 username=calledID, host=self.ua.rAddr0[0], port=self.ua.rAddr0[1]
             )
-            self.ua.rUri = SipTo(
-                address=SipAddress(url=self.ua.rTarget.getCopy(), hadbrace=True)
-            )
-            self.ua.rUri.getUrl().port = None
-            self.ua.lUri = SipFrom(
-                address=SipAddress(
-                    url=SipURL(username=callingID), hadbrace=True, name=callingName
-                )
-            )
-            self.ua.lUri.getUrl().port = None
-            self.ua.lUri.setTag(self.ua.lTag)
-            self.ua.lCSeq = 200
+            # self.ua.rUri = SipTo(
+            #    address=SipAddress(url=self.ua.rTarget.getCopy(), hadbrace=True)
+            # )
+            # self.ua.rUri.getUrl().port = None
+            # self.ua.lUri = SipFrom(
+            #    address=SipAddress(
+            # url=SipURL(username=callingID), hadbrace=True, name=callingName
+            #    )
+            # )
+
             if self.ua.lContact == None:
                 self.ua.lContact = SipContact()
             self.ua.lContact.getUrl().username = callingID

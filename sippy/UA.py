@@ -32,7 +32,7 @@ from sippy.SipContentType import SipContentType
 from sippy.SipMaxForwards import SipMaxForwards
 from sippy.CCEvents import CCEventTry, CCEventFail, CCEventDisconnect
 from hashlib import md5
-from random import random
+from random import random, randrange
 from time import time
 from sippy.Time.MonoTime import MonoTime
 from sippy.Time.Timeout import TimeoutAbsMono
@@ -103,6 +103,8 @@ class UA(object):
     compact_sip = False
     uas_lossemul = 0
 
+    source_via = None
+
     def __init__(
         self,
         global_config,
@@ -160,6 +162,7 @@ class UA(object):
         self.expire_time = expire_time
         self.no_progress_time = no_progress_time
         # print self.username, self.password
+        self.lCSeq = randrange(10000, 29999)
 
     async def recvRequest(self, req, sip_t):
         # print 'Received request %s in state %s instance %s' % (req.getMethod(), self.state, self)
@@ -303,7 +306,7 @@ class UA(object):
             max_forwards_hf = None
         req = SipRequest(method = method, ruri = self.rTarget, to = self.rUri, fr0m = self.lUri,
                          cseq = self.lCSeq, callid = self.cId, contact = self.lContact,
-                         routes = self.routes, target = target,
+                         routes = self.routes, target = target, via=self.source_via,
                          user_agent = self.local_ua, maxforwards = max_forwards_hf)
         if cqop != None:
             challenge, qop = cqop
