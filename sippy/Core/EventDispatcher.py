@@ -43,12 +43,13 @@ class Cancellable:
     and is used for cancellation.
     """
 
-    def __init__(self, ed, task, nticks):
+    def __init__(self, ed, task, nticks, secs):
         self._task = task
         self.ed = ed
         self._tg = None
         self.nticks = nticks
         self.is_cancelled = False
+        self.secs = secs
 
     def cancel(self):
         if self.ed.is_running:
@@ -57,7 +58,10 @@ class Cancellable:
             else:
                 self.is_cancelled = True
         else:
-            self.ed.tpending.remove(self)
+            try:
+                self.ed.tpending.remove(self)
+            except Exception:
+                pass
 
     def go(self):
         self.ed.go_timer(self)
@@ -77,18 +81,19 @@ class Cancellable:
 
 
 def _twrapper(ed, timeout_cb, ival, nticks, abs_time, *cb_params):
+    if abs_time:
+        secs = max(ival - MonoTime(), 0.0)
+    else:
+        secs = ival
     async def _task():
-        if abs_time:
-            await sleep(max(ival - MonoTime(), 0.0))
-        else:
-            await sleep(ival)
+        await sleep(secs)
 
         if inspect.iscoroutinefunction(timeout_cb):
             await timeout_cb(*cb_params)
         else:
             timeout_cb(*cb_params)
 
-    return Cancellable(ed, _task, nticks)
+    return Cancellable(ed, _task, nticks, secs)
 
 
 class EventDispatcher:
