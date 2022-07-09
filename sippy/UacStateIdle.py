@@ -60,9 +60,12 @@ class UacStateIdle(UaStateGeneric):
             self.ua.global_config["_sip_tm"].regConsumer(
                 self.ua, str(self.ua.cId), compact=self.ua.compact_sip
             )
-            self.ua.rTarget = SipURL(
-                username=calledID, host=self.ua.rAddr0[0], port=self.ua.rAddr0[1]
-            )
+
+            if self.ua.rTarget is None:
+                self.ua.rTarget = SipURL(username=calledID, host=self.ua.rAddr0[0])
+            # self.ua.rTarget = SipURL(
+            #    username=calledID, host=self.ua.rAddr0[0], port=self.ua.rAddr0[1]
+            # )
             # self.ua.rUri = SipTo(
             #    address=SipAddress(url=self.ua.rTarget.getCopy(), hadbrace=True)
             # )
@@ -73,7 +76,7 @@ class UacStateIdle(UaStateGeneric):
             #    )
             # )
 
-            if self.ua.lContact == None:
+            if self.ua.lContact is None:
                 self.ua.lContact = SipContact()
             self.ua.lContact.getUrl().username = callingID
             self.ua.routes = []
