@@ -221,7 +221,7 @@ class UA(object):
             if code == 401 and self.processChallenge(resp, cseq, \
               'www-authenticate', 'authorization'):
                 return None
-            if code == 407 and self.processChallenge(resp, cseq, \
+            if code == 407 and await self.processChallenge(resp, cseq, \
               'proxy-authenticate', 'proxy-authorization'):
                 return None
         if code >= 200 and cseq in self.reqs:
