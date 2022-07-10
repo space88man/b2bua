@@ -37,9 +37,9 @@ class UaStateFailed(UaStateGeneric):
         ua.on_remote_sdp_change = None
         Timeout(self.goDead, ua.godead_timeout)
 
-    def goDead(self):
+    async def goDead(self):
         # print 'Time in Failed state expired, going to the Dead state'
-        self.ua.changeState((UaStateDead,))
+        await self.ua.changeState((UaStateDead,))
 
 
 if "UaStateDead" not in globals():
