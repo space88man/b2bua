@@ -26,7 +26,11 @@
 
 from sippy.Time.MonoTime import MonoTime
 import os
-from anyio import create_task_group, run, sleep, create_memory_object_stream
+from anyio import (
+    create_task_group, run, sleep,
+    create_memory_object_stream, TASK_STATUS_IGNORED
+)
+from anyio.abc import TaskStatus
 import inspect
 import logging
 
@@ -126,7 +130,7 @@ class EventDispatcher:
                     break
                 self.tg.start_soon(item.run_task)
 
-    async def aloop(self):
+    async def aloop(self, *, task_status: TaskStatus = TASK_STATUS_IGNORED):
         """Runs event loop forever."""
 
         # overloaded member: used to schedule timers
@@ -145,6 +149,7 @@ class EventDispatcher:
 
             # this task runs the event loop forever...
             self.tg.start_soon(self._timer_wait)
+            task_status.started()
 
     def loop(self):
         run(self.aloop, backend=os.getenv("SIPPY_ASYNC_BACKEND", "asyncio"))
