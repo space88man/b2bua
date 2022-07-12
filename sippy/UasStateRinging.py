@@ -193,9 +193,9 @@ class UasStateRinging(UaStateGeneric):
             return (UaStateDisconnected, self.ua.disc_cbs, req.rtime, self.ua.origin)
         return None
 
-    def cancel(self, rtime, req):
+    async def cancel(self, rtime, req):
         self.ua.disconnect_ts = rtime
-        self.ua.changeState(
+        await self.ua.changeState(
             (UaStateDisconnected, self.ua.disc_cbs, rtime, self.ua.origin)
         )
         event = CCEventDisconnect(rtime=rtime, origin=self.ua.origin)
@@ -204,7 +204,7 @@ class UasStateRinging(UaStateGeneric):
                 event.reason = req.getHFBody("reason")
             except Exception:
                 pass
-        self.ua.emitEvent(event)
+        await self.ua.emitEvent(event)
 
 
 if "UaStateFailed" not in globals():

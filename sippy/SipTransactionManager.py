@@ -803,7 +803,7 @@ class SipTransactionManager(object):
         if t.r487 != None:
             await self.sendResponse(t.r487, t, True)
         if t.cancel_cb != None:
-            t.cancel_cb(rtime, req)
+            await t.cancel_cb(rtime, req)
 
     def timerD(self, t):
         # print 'timerD'
