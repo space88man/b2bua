@@ -39,6 +39,7 @@ from hashlib import md5
 from functools import reduce
 import sys
 import socket
+import anyio
 
 
 class NETS_1918(object):
@@ -698,25 +699,28 @@ class SipTransactionManager(object):
                 t.needack = False
                 t.branch = None
             self.tserver[t.tid] = t
-            for consumer in self.req_consumers.get(t.tid[0], ()):
-                cobj = consumer.cobj.isYours(msg)
-                if cobj != None:
-                    t.compact = consumer.compact
-                    rval = await cobj.recvRequest(msg, t)
-                    break
-            else:
-                if self.req_cb == None:
-                    self.l1rcache[checksum] = SipTMRetransmitO()
+            t.lock = anyio.Lock()
+            async with t.lock:
+                for consumer in self.req_consumers.get(t.tid[0], ()):
+                    cobj = consumer.cobj.isYours(msg)
+                    if cobj != None:
+                        t.compact = consumer.compact
+                        rval = await cobj.recvRequest(msg, t)
+                        break
+                else:
+                    if self.req_cb == None:
+                        self.l1rcache[checksum] = SipTMRetransmitO()
+                        return
+                    rval = await self.req_cb(msg, t)
+                if rval == None:
+                    if t.teA != None or t.teD != None or t.teE != None or t.teF != None:
+                        return
+                    if t.tid in self.tserver:
+                        del self.tserver[t.tid]
+                    t.cleanup()
                     return
-                rval = await self.req_cb(msg, t)
-            if rval == None:
-                if t.teA != None or t.teD != None or t.teE != None or t.teF != None:
-                    return
-                if t.tid in self.tserver:
-                    del self.tserver[t.tid]
-                t.cleanup()
-                return
-            resp, t.cancel_cb, t.noack_cb = rval
+                resp, t.cancel_cb, t.noack_cb = rval
+
             if resp != None:
                 await self.sendResponse(resp, t, lossemul = resp.lossemul)
 
@@ -802,17 +806,20 @@ class SipTransactionManager(object):
             rtime = MonoTime()
         if t.r487 != None:
             await self.sendResponse(t.r487, t, True)
-        if t.cancel_cb != None:
-            await t.cancel_cb(rtime, req)
 
-    def timerD(self, t):
+        async with t.lock:
+            if t.cancel_cb != None:
+                await t.cancel_cb(rtime, req)
+
+    async def timerD(self, t):
         # print 'timerD'
         t.teD = None
         if t.teA != None:
             t.teA.cancel()
             t.teA = None
-        if t.noack_cb != None and t.state != CONFIRMED:
-            t.noack_cb()
+        async with t.lock:
+            if t.noack_cb != None and t.state != CONFIRMED:
+                await t.noack_cb()
         del self.tserver[t.tid]
         t.cleanup()
 
