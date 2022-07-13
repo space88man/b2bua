@@ -23,6 +23,9 @@
 # ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+from hashlib import md5
+from random import random, randrange
+import inspect
 
 from sippy.SipHeader import SipHeader
 from sippy.UasStateIdle import UasStateIdle
@@ -31,8 +34,6 @@ from sippy.SipRequest import SipRequest
 from sippy.SipContentType import SipContentType
 from sippy.SipMaxForwards import SipMaxForwards
 from sippy.CCEvents import CCEventTry, CCEventFail, CCEventDisconnect
-from hashlib import md5
-from random import random, randrange
 from time import time
 from sippy.Time.MonoTime import MonoTime
 from sippy.Time.Timeout import TimeoutAbsMono
@@ -275,7 +276,10 @@ class UA(object):
         self.state = newstate[0](self)
         if len(newstate) > 1:
             for callback in newstate[1]:
-                callback(self, *newstate[2:])
+                if inspect.iscoroutinefunction(callback):
+                    await callback(self, *newstate[2:])
+                else:
+                    callback(self, *newstate[2:])
 
     async def emitEvent(self, event):
         if self.event_cb != None:
