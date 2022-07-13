@@ -698,6 +698,9 @@ class SipTransactionManager(object):
                 t.r487 = None
                 t.needack = False
                 t.branch = None
+            # this transaction can be used before being fully initialised,
+            # e.g., incoming CANCEL; the lock is used when .cancel_cb/.noack_cb
+            # are invoked to ensure they are set by req_cb/recvRequest
             self.tserver[t.tid] = t
             t.lock = anyio.Lock()
             async with t.lock:
@@ -722,7 +725,7 @@ class SipTransactionManager(object):
                 resp, t.cancel_cb, t.noack_cb = rval
 
             if resp != None:
-                await self.sendResponse(resp, t, lossemul = resp.lossemul)
+                await self.sendResponse(resp, t, lossemul=resp.lossemul)
 
     def regConsumer(self, consumer, call_id, compact=False):
         cons = SipTransactionConsumer(consumer, compact)
