@@ -41,6 +41,7 @@ from sippy.CCEvents import (
     CCEventConnect,
 )
 from functools import partial
+import inspect
 
 
 class UaStateConnected(UaStateGeneric):
@@ -157,7 +158,10 @@ class UaStateConnected(UaStateGeneric):
         self.ua.startCreditTimer(req.rtime)
         self.ua.connect_ts = req.rtime
         for callback in self.ua.conn_cbs:
-            callback(self.ua, req.rtime, self.ua.origin)
+            if inspect.iscoroutinefunction(callback):
+                await callback(self.ua, req.rtime, self.ua.origin)
+            else:
+                callback(self.ua, req.rtime, self.ua.origin)
         if body != None:
             if self.ua.on_remote_sdp_change != None:
                 await self.ua.on_remote_sdp_change(
