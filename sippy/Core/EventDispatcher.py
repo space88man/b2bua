@@ -28,7 +28,8 @@ from sippy.Time.MonoTime import MonoTime
 import os
 from anyio import (
     create_task_group, run, sleep,
-    create_memory_object_stream, TASK_STATUS_IGNORED
+    create_memory_object_stream, TASK_STATUS_IGNORED,
+    CancelScope
 )
 from anyio.abc import TaskStatus
 import inspect
@@ -50,15 +51,15 @@ class Cancellable:
     def __init__(self, ed, task, nticks, secs):
         self._task = task
         self.ed = ed
-        self._tg = None
+        self._scope = None
         self.nticks = nticks
         self.is_cancelled = False
         self.secs = secs
 
     def cancel(self):
         if self.ed.is_running:
-            if self._tg:
-                self._tg.cancel_scope.cancel()
+            if self._scope:
+                self._scope.cancel()
             else:
                 self.is_cancelled = True
         else:
@@ -74,7 +75,7 @@ class Cancellable:
         if self.is_cancelled:
             LOG.warning("Timer is cancelled before starting")
             return
-        async with create_task_group() as self._tg:
+        with CancelScope() as self._scope:
             await self._task()
 
             if self.nticks is not None and (self.nticks == -1 or self.nticks > 1):
