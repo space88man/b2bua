@@ -5,7 +5,7 @@ requirements = [x.strip() for x in open("requirements.txt", "r").readlines()]
 
 setup(
     name="sippy-tbs",
-    version="2022.7.1",
+    version="2022.7.2.dev0",
     packages=find_packages(),
     # install_requires = requirements,
     package_data={"": ["dictionary", "*.md"]},
