@@ -309,7 +309,7 @@ class UA(object):
         else:
             max_forwards_hf = None
         req = SipRequest(method = method, ruri = self.rTarget, to = self.rUri, fr0m = self.lUri,
-                         cseq = self.lCSeq, callid = self.cId, contact = self.lContact,
+                         cseq = self.lCSeq, callid = self.cId, contact = self.lContact if method == "INVITE" else None,
                          routes = self.routes, target = target, via=self.source_via,
                          user_agent = self.local_ua, maxforwards = max_forwards_hf)
         if cqop != None:
