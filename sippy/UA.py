@@ -248,11 +248,11 @@ class UA(object):
             await self.changeState(newstate)
         await self.emitPendingEvents()
 
-    def disconnect(self, rtime=None):
+    async def disconnect(self, rtime=None):
         if rtime == None:
             rtime = MonoTime()
         self.equeue.append(CCEventDisconnect(rtime=rtime))
-        self.recvEvent(CCEventDisconnect(rtime=rtime))
+        await self.recvEvent(CCEventDisconnect(rtime=rtime))
 
     def expires(self):
         self.expire_timer = None
